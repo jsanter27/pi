@@ -1,14 +1,43 @@
+import { resolveAzureConfig, resolveDeploymentName } from "../api/azure-openai-config.ts";
 import { azureOpenAIResponsesApi } from "../api/azure-openai-responses.lazy.ts";
+import { lazyStream } from "../api/lazy.ts";
+import { openAICompletionsApi } from "../api/openai-completions.lazy.ts";
 import { envApiKeyAuth } from "../auth/helpers.ts";
 import { createProvider, type Provider } from "../models.ts";
+import type { Api, Model, ProviderStreams, StreamOptions } from "../types.ts";
 import { AZURE_OPENAI_RESPONSES_MODELS } from "./azure-openai-responses.models.ts";
 
-export function azureOpenAIResponsesProvider(): Provider<"azure-openai-responses"> {
+function resolveAzureModel(model: Model<Api>, options: StreamOptions | undefined): Model<Api> {
+	return {
+		...model,
+		baseUrl: resolveAzureConfig(model, options).baseUrl,
+		id: resolveDeploymentName(model, options),
+	};
+}
+
+/**
+ * Resolve the Azure endpoint and deployment onto the model before dispatch, inside
+ * `lazyStream` so an unconfigured endpoint errors on the stream instead of throwing.
+ */
+function azureStreams(streams: ProviderStreams): ProviderStreams {
+	return {
+		...streams,
+		stream: (model, context, options) =>
+			lazyStream(model, async () => streams.stream(resolveAzureModel(model, options), context, options)),
+		streamSimple: (model, context, options) =>
+			lazyStream(model, async () => streams.streamSimple(resolveAzureModel(model, options), context, options)),
+	};
+}
+
+export function azureOpenAIResponsesProvider(): Provider<"azure-openai-responses" | "openai-completions"> {
 	return createProvider({
 		id: "azure-openai-responses",
 		name: "Azure OpenAI",
 		auth: { apiKey: envApiKeyAuth("Azure OpenAI API key", ["AZURE_OPENAI_API_KEY"]) },
 		models: Object.values(AZURE_OPENAI_RESPONSES_MODELS),
-		api: azureOpenAIResponsesApi(),
+		api: {
+			"azure-openai-responses": azureOpenAIResponsesApi(),
+			"openai-completions": azureStreams(openAICompletionsApi()),
+		},
 	});
 }
