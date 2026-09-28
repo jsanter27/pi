@@ -1282,15 +1282,15 @@ function buildAdditionalModelRequestFields(
 
 	const candidates = getModelMatchCandidates(model.id, model.name);
 
-	if (candidates.some((s) => /(?:^|-)gpt-\d/.test(s))) {
+	if (candidates.some((s) => s.includes("gpt-oss"))) {
+		return { reasoning_effort: OPENAI_GPT_OSS_EFFORT[options.reasoning] };
+	}
+
+	if (candidates.some((s) => s.includes("gpt-"))) {
 		const mapped = model.thinkingLevelMap?.[options.reasoning];
 		return {
 			reasoning: { effort: typeof mapped === "string" ? mapped : OPENAI_GPT_EFFORT[options.reasoning] },
 		};
-	}
-
-	if (candidates.some((s) => s.includes("gpt-oss"))) {
-		return { reasoning_effort: OPENAI_GPT_OSS_EFFORT[options.reasoning] };
 	}
 
 	return undefined;
